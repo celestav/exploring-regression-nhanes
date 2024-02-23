@@ -1,0 +1,299 @@
+---
+title: "Exploring Regression with NHANES Data"
+author: "Celesta Van Wyk"
+date: "2022-07-18"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This code is from a course titled Data Mining. In an open-ended portion of our final project, we were encouraged to use at least three different regression methods from the National Health and Nutrition Examination Survey (NHANES) data with variables of our choosing. My partners and I chose to study systolic blood pressure against different demographic and examination variables. We attempted to find the best method to choosing a regression model for this data, and after interpreted the results of the regression coefficients for our report. Although I worked with a group on this project, this code is self-written with the help of the book, Data for an Introduction to Statistical Learning with Applications in R (ISLR), in order to abide with the Engineering Honor Code.
+
+Data from the National Health and Nutrition Examination Survey ([NHANES](https://wwwn.cdc.gov/nchs/nhanes/Default.aspx)).
+
+## Set Up
+```{r message=FALSE}
+library(haven)
+library(tidyverse)
+library(tidyr)
+library(leaps)
+library(dplyr)
+library(glmnet)
+library(pls)
+```
+
+```{r 2009-2010}
+BPX2009 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2009-2010/BPX_F.XPT"))
+BMX2009 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2009-2010/BMX_F.XPT"))
+DEMO2009 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2009-2010/DEMO_F.XPT"))
+SMQ2009 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2009-2010/SMQ_F.XPT"))
+TCHOL2009 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2009-2010/TCHOL_F.XPT"))
+
+df_list2009 <- list(BPX2009, BMX2009, DEMO2009, SMQ2009, TCHOL2009)
+df_list2009 <- df_list2009 %>% reduce(full_join, by='SEQN')
+```
+```{r 2011-2012}
+BPX2011 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/BPX_G.XPT"))
+BMX2011 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/BMX_G.XPT"))
+DEMO2011 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/DEMO_G.XPT"))
+SMQ2011 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/SMQ_G.XPT"))
+TCHOL2011 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/TCHOL_G.XPT"))
+
+df_list2011 <- list(BPX2011, BMX2011, DEMO2011, SMQ2011, TCHOL2011)
+df_list2011 <- df_list2011 %>% reduce(full_join, by='SEQN')
+```
+```{r 2013-2014}
+BPX2013 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/BPX_H.XPT"))
+BMX2013 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/BMX_H.XPT"))
+DEMO2013 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/DEMO_H.XPT"))
+SMQ2013 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/SMQ_H.XPT"))
+TCHOL2013 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/TCHOL_H.XPT"))
+
+df_list2013 <- list(BPX2013, BMX2013, DEMO2013, SMQ2013, TCHOL2013)
+df_list2013 <- df_list2013 %>% reduce(full_join, by='SEQN')
+```
+```{r 2015-2016}
+BPX2015 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/BPX_I.XPT"))
+BMX2015 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/BMX_I.XPT"))
+DEMO2015 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/DEMO_I.XPT"))
+SMQ2015 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/SMQ_I.XPT"))
+TCHOL2015 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2015-2016/TCHOL_I.XPT"))
+
+df_list2015 <- list(BPX2015, BMX2015, DEMO2015, SMQ2015, TCHOL2015)
+df_list2015 <- df_list2015 %>% reduce(full_join, by='SEQN')
+```
+```{r 2017-2018}
+BPX2017 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/BPX_J.XPT"))
+BMX2017 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/BMX_J.XPT"))
+DEMO2017 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/DEMO_J.XPT"))
+SMQ2017 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/SMQ_J.XPT"))
+TCHOL2017 <- as.data.frame(read_xpt("https://wwwn.cdc.gov/Nchs/Nhanes/2017-2018/TCHOL_J.XPT"))
+
+df_list2017 <- list(BPX2017, BMX2017, DEMO2017, SMQ2017, TCHOL2017)
+df_list2017 <- df_list2017 %>% reduce(full_join, by='SEQN')
+```
+
+```{r}
+df_final <- bind_rows(df_list2009, df_list2011, df_list2013, df_list2015, df_list2017)
+dim(df_final)
+df_final <- df_final[!is.na(df_final$BPXSY1),]
+df_final <- df_final[!is.na(df_final$BPXSY2),]
+df_final <- df_final[!is.na(df_final$BPXSY3),]
+df_final <- df_final[, which(colMeans(!is.na(df_final)) > 0.9)]
+dim(df_final)
+df <- df_final[rowSums(is.na(df_final)) == 0, ]
+colnames(df)
+```
+
+```{r}
+df <- subset(df, select = c(BPAARM, BPXSY1, BPXSY2, BPXSY3, BPACSZ, BPXPLS, BMXWT, 
+                            BMXHT, BMXBMI, BMXLEG, BMXARML, BMXARMC, BMXWAIST, 
+                            RIDEXMON, RIAGENDR, RIDAGEYR, RIDRETH1, DMDHHSIZ, 
+                            DMDFMSIZ, INDFMPIR))
+colnames(df)
+df$BPAARM <- as.factor(df$BPAARM)
+df$RIDEXMON <- as.factor(df$RIDEXMON)
+df$RIAGENDR <- as.factor(df$RIAGENDR)
+df$RIDRETH1 <- as.factor(df$RIDRETH1)
+df$BPXSY <- (df$BPXSY1 + df$BPXSY2 + df$BPXSY3)/3
+df <- subset(df, select = -c(BPXSY1, BPXSY2, BPXSY3))
+colnames(df)
+```
+
+```{r}
+set.seed(777)
+sample_size = floor(.8*nrow(df))
+picked = sample(seq_len(nrow(df)), size = sample_size)
+train_df = df[picked,]
+test_df = df[-picked,]
+test_mat <- model.matrix(BPXSY ~ ., data = test_df)
+train_mat <- model.matrix(BPXSY ~ ., data = train_df)
+```
+
+
+## Best Subset Selection
+
+```{r}
+set.seed(1)
+n_predictors <- ncol(train_df)
+bestsubset <- regsubsets(BPXSY ~ ., data = train_df, nvmax = n_predictors)
+best_summary <- summary(bestsubset)
+pt <- which.max(best_summary$adjr2)
+plot(best_summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", type = "l")
+points(pt, best_summary$adjr2[pt], col = "red", cex = 2, pch = 20)
+coef(bestsubset, pt)
+```
+```{r}
+best_errors <- rep(NA, 18)
+for (i in 1:18) {
+  best_coef <- coef(bestsubset, id = i)
+  pred <- test_mat[, names(best_coef)] %*% best_coef
+  best_errors[i] <- mean((test_df$BPXSY - pred)^2)
+}
+which.min(best_errors)
+min(best_errors)
+best_errors[pt]
+```
+
+
+## Forward Stepwise Selection
+
+```{r}
+forward <- regsubsets(BPXSY ~ ., data = train_df, nvmax = n_predictors, 
+                      method = "forward")
+fwd_summary <- summary(forward)
+ptf <- which.max(fwd_summary$adjr2)
+plot(fwd_summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", type = "l")
+points(ptf, fwd_summary$adjr2[ptf], col = "red", cex = 2,pch = 20)
+(coef(forward, ptf))
+```
+
+```{r}
+fwd_errors <- rep(NA, 18)
+for (i in 1:18) {
+  fwd_coef <- coef(forward, id = i)
+  pred <- test_mat[, names(fwd_coef)] %*% fwd_coef
+  fwd_errors[i] <- mean((test_df$BPXSY - pred)^2)
+}
+which.min(fwd_errors)
+min(fwd_errors)
+fwd_errors[ptf]
+```
+
+
+## Backward Stepwise Selection
+
+```{r}
+backward <- regsubsets(BPXSY ~ ., data = train_df, nvmax = n_predictors, 
+                       method = "backward")
+bwd_summary <- summary(backward)
+ptb <- which.max(bwd_summary$adjr2)
+plot(bwd_summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted RSq", type = "l")
+points(ptb, bwd_summary$adjr2[ptf], col = "red", cex = 2,pch = 20)
+(coef(backward, ptb))
+```
+
+```{r}
+bwd_errors <- rep(NA, 18)
+for (i in 1:18) {
+  bwd_coef <- coef(backward, id = i)
+  pred <- test_mat[, names(bwd_coef)] %*% bwd_coef
+  bwd_errors[i] <- mean((test_df$BPXSY - pred)^2)
+}
+which.min(bwd_errors)
+min(bwd_errors)
+bwd_errors[ptb]
+```
+
+## Ridge Regression
+
+```{r }
+grid <- 10^seq(10, -2, length = 100)
+x <- model.matrix(BPXSY ~ ., df)[, -1]
+y <- df$BPXSY
+set.seed(1)
+train <- sample(1: nrow(x), nrow(x) / 2)
+test <- (-train)
+y_test <- y[test]
+ridge_mod <- glmnet(x[train,], y[train], alpha = 0, lambda = grid, thresh = 1e-12)
+predict(ridge_mod, s = 0, exact = T, type = "coefficients", x = x[train,],
+        y = y[train])[1:21, ]
+
+cvridge <- cv.glmnet(x[train,], y[train], alpha = 0)
+plot(cvridge)
+```
+```{r}
+bestlam <- cvridge$lambda.min
+ridge_pred <- predict(ridge_mod, s = bestlam, newx = x[test,])
+ridge_test_mse <- mean((ridge_pred - y_test)^2)
+out <- glmnet(x, y, alpha = 0)
+predict(out, type = "coefficients", s = bestlam)
+```
+
+
+## Lasso
+
+```{r}
+lasso_mod <- glmnet(x[train,], y[train], alpha = 1, lambda = grid)
+plot(lasso_mod)
+set.seed (1)
+cvlasso <- cv.glmnet(x[train,], y[train], alpha = 1)
+plot(cvlasso)
+```
+```{r}
+bestlam <- cvlasso$lambda.min
+lasso_pred <- predict(lasso_mod, s = bestlam, newx = x[test,])
+lasso_test_mse <- mean((lasso_pred - y_test)^2)
+bestlam
+out <- glmnet(x, y, alpha = 1, lambda = grid)
+lasso_coef <- predict(out, type = "coefficients",s = bestlam)
+lasso_coef
+```
+
+
+## Principal Components Regression
+
+```{r}
+set.seed (1)
+pcr_fit <- pcr(BPXSY ~ ., data = df, subset = train, scale = TRUE, validation = "CV")
+validationplot(pcr_fit, val.type = "MSEP")
+summary(pcr_fit)
+```
+```{r}
+pcr_pred <- predict(pcr_fit, x[test,], ncomp = 20)
+pcr_test_mse <- mean((pcr_pred - y_test)^2)
+```
+
+
+## Partial Least Squares
+
+```{r}
+set.seed (1)
+pls_fit <- plsr(BPXSY ~ ., data = df, subset = train, scale = TRUE, validation = "CV")
+summary(pls_fit)
+```
+```{r}
+pls_pred <- predict(pls_fit, x[test,], ncomp = 20)
+pls_test_mse <- mean((pls_pred - y_test)^2)
+```
+
+## Results
+
+| Method                          | Test MSE           |
+|---------------------------------|--------------------|
+| Best Subset Selection           | `r pcr_test_mse`   | 
+| Forward Step-wise Selection     | `r pls_test_mse`   | 
+| Backward Step-wise Selection    | `r pls_test_mse`   | 
+| Ridge Regression                | `r ridge_test_mse` | 
+| The Lasso                       | **`r lasso_test_mse`** | 
+| Principal Components Regression | `r pcr_test_mse`   | 
+| Partial Least Squares           | `r pls_test_mse`   |  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
