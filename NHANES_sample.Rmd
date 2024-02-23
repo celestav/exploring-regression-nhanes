@@ -1,7 +1,6 @@
 ---
 title: "Exploring Regression with NHANES Data"
 author: "Celesta Van Wyk"
-date: "2022-07-18"
 output:
   pdf_document: default
   html_document: default
